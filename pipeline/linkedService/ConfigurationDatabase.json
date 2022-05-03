@@ -1,0 +1,21 @@
+{
+	"name": "ConfigurationDatabase",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"ServerName": {
+				"type": "string",
+				"defaultValue": "hevandsqlserver"
+			},
+			"DatabaseName": {
+				"type": "string",
+				"defaultValue": "hevandsql1"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlDatabase",
+		"typeProperties": {
+			"connectionString": "Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=\"@{concat(linkedService().ServerName, '.database.windows.net')}\";Initial Catalog=@{linkedService().DatabaseName}"
+		}
+	}
+}

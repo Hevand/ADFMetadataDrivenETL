@@ -1,0 +1,120 @@
+{
+	"name": "004_InitializeMetadataTable",
+	"properties": {
+		"activities": [
+			{
+				"name": "Check Configuration",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "ConfigurationTable",
+						"type": "DatasetReference",
+						"parameters": {
+							"ServerName": {
+								"value": "@pipeline().parameters.Config_ServerName",
+								"type": "Expression"
+							},
+							"DatabaseName": {
+								"value": "@pipeline().parameters.Config_DatabaseName",
+								"type": "Expression"
+							},
+							"ConfigurationForDatabaseName": {
+								"value": "@pipeline().parameters.DatabaseConfigTableName",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			},
+			{
+				"name": "Initialize Metadata",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Check Configuration",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[usp_CreateMetadataConfigurationTableForDatabase]",
+					"storedProcedureParameters": {
+						"DatabaseConfigTableName": {
+							"value": {
+								"value": "@pipeline().parameters.DatabaseConfigTableName",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "ConfigurationDatabase",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"ServerName": {
+							"value": "@pipeline().parameters.Config_ServerName",
+							"type": "Expression"
+						},
+						"DatabaseName": {
+							"value": "@pipeline().parameters.Config_DatabaseName",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"SubscriptionId": {
+				"type": "string"
+			},
+			"ResourceGroup": {
+				"type": "string"
+			},
+			"ServerName": {
+				"type": "string"
+			},
+			"DatabaseName": {
+				"type": "string"
+			},
+			"DatabaseConfigTableName": {
+				"type": "string"
+			},
+			"Config_ServerName": {
+				"type": "string"
+			},
+			"Config_DatabaseName": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Process Database"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-04-28T14:21:41Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

@@ -1,0 +1,12 @@
+{
+	"name": "TargetStorageAccount",
+	"properties": {
+		"annotations": [],
+		"type": "AzureBlobStorage",
+		"typeProperties": {
+			"serviceEndpoint": "https://hevandadfsample.blob.core.windows.net",
+			"accountKind": "StorageV2"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/linkedservices"
+}

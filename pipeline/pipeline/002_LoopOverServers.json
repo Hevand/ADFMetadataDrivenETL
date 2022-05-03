@@ -1,0 +1,117 @@
+{
+	"name": "002_LoopOverServers",
+	"properties": {
+		"description": "This pipeline will use the Azure REST API to get all databases in the given subscription.",
+		"activities": [
+			{
+				"name": "Get servers by resource group",
+				"description": "Use the Azure REST API to retrieve all servers in this RG",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://management.azure.com/subscriptions/',\npipeline().parameters.SubscriptionId,\n'/resourceGroups/',\npipeline().parameters.ResourceGroup\n,'/providers/Microsoft.Sql/servers?api-version=2021-11-01-preview')\n",
+						"type": "Expression"
+					},
+					"method": "GET",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://management.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "Process servers in resource group",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get servers by resource group",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get servers by resource group').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Loop over databases",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "003_LoopOverDatabases",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"SubscriptionId": {
+										"value": "@pipeline().parameters.SubscriptionId",
+										"type": "Expression"
+									},
+									"ResourceGroup": {
+										"value": "@pipeline().parameters.ResourceGroup",
+										"type": "Expression"
+									},
+									"ServerName": {
+										"value": "@item().name",
+										"type": "Expression"
+									},
+									"Config_ServerName": {
+										"value": "@pipeline().parameters.Config_ServerName",
+										"type": "Expression"
+									},
+									"Config_DatabaseName": {
+										"value": "@pipeline().parameters.Config_DatabaseName",
+										"type": "Expression"
+									},
+									"PipelineRunOutputPath": {
+										"value": "@pipeline().parameters.PipelineRunOutputPath",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"SubscriptionId": {
+				"type": "string"
+			},
+			"ResourceGroup": {
+				"type": "string"
+			},
+			"Config_ServerName": {
+				"type": "string"
+			},
+			"Config_DatabaseName": {
+				"type": "string"
+			},
+			"PipelineRunOutputPath": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Identify all databases"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-04-28T14:30:16Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

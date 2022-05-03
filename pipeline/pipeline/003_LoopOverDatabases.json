@@ -1,0 +1,193 @@
+{
+	"name": "003_LoopOverDatabases",
+	"properties": {
+		"activities": [
+			{
+				"name": "Get databases by server",
+				"type": "WebActivity",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://management.azure.com/subscriptions/',\npipeline().parameters.SubscriptionId,\n'/resourceGroups/',\npipeline().parameters.ResourceGroup\n,'/providers/Microsoft.Sql/servers/',\npipeline().parameters.ServerName\n,'/databases?api-version=2021-11-01-preview')",
+						"type": "Expression"
+					},
+					"method": "GET",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://management.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "Process Database",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Exclude master tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Exclude master tables').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Initialize Configuration",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "004_InitializeMetadataTable",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"SubscriptionId": {
+										"value": "@pipeline().parameters.SubscriptionId",
+										"type": "Expression"
+									},
+									"ResourceGroup": {
+										"value": "@pipeline().parameters.ResourceGroup",
+										"type": "Expression"
+									},
+									"ServerName": {
+										"value": "@pipeline().parameters.ServerName",
+										"type": "Expression"
+									},
+									"DatabaseName": {
+										"value": "@item().name",
+										"type": "Expression"
+									},
+									"DatabaseConfigTableName": {
+										"value": "@concat(pipeline().parameters.ServerName,\n'_',\nitem().name,\n'_metadata')",
+										"type": "Expression"
+									},
+									"Config_ServerName": {
+										"value": "@pipeline().parameters.Config_ServerName",
+										"type": "Expression"
+									},
+									"Config_DatabaseName": {
+										"value": "@pipeline().parameters.Config_DatabaseName",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "Extract data",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "Initialize Configuration",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "005_GroupDatabaseTablesAsPages",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"MaxNumberOfObjectsReturnedFromLookupActivity": 5000,
+									"MaxNumberOfConcurrentTasks": 20,
+									"MetadataConfigurationTableName": {
+										"value": "@concat(pipeline().parameters.ServerName,\n'_',\nitem().name,\n'_metadata')",
+										"type": "Expression"
+									},
+									"ServerName": {
+										"value": "@pipeline().parameters.ServerName",
+										"type": "Expression"
+									},
+									"DatabaseName": {
+										"value": "@item().name",
+										"type": "Expression"
+									},
+									"Config_ServerName": {
+										"value": "@pipeline().parameters.Config_ServerName",
+										"type": "Expression"
+									},
+									"Config_DatabaseName": {
+										"value": "@pipeline().parameters.Config_DatabaseName",
+										"type": "Expression"
+									},
+									"PipelineRunOutputPath": {
+										"value": "@pipeline().parameters.PipelineRunOutputPath",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Exclude master tables",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "Get databases by server",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get databases by server').output.value",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@not(equals(item().name,'master'))",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"SubscriptionId": {
+				"type": "string"
+			},
+			"ResourceGroup": {
+				"type": "string"
+			},
+			"ServerName": {
+				"type": "string"
+			},
+			"Config_ServerName": {
+				"type": "string"
+			},
+			"Config_DatabaseName": {
+				"type": "string"
+			},
+			"PipelineRunOutputPath": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Identify all databases"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-04-28T14:30:15Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

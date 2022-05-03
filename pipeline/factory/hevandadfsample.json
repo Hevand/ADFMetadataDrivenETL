@@ -1,0 +1,9 @@
+{
+	"name": "hevandadfsample",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "2936c291-df88-432e-86fb-332855fc0ef6",
+		"tenantId": "5cf71f32-97d5-4392-ad39-592106fcdf19"
+	}
+}

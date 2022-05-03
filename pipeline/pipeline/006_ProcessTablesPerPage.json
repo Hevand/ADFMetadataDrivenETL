@@ -1,0 +1,163 @@
+{
+	"name": "006_ProcessTablesPerPage",
+	"properties": {
+		"description": "This pipeline will copy one batch of objects. The objects belonging to this batch will be copied parallelly.",
+		"activities": [
+			{
+				"name": "DivideOneBatchIntoMultipleGroups",
+				"description": "Divide objects from single batch into multiple sub parallel groups to avoid reaching the output limit of lookup activity.",
+				"type": "ForEach",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@range(0, add(div(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity),\n                    if(equals(mod(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity), 0), 0, 1)))",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 50,
+					"activities": [
+						{
+							"name": "GetObjectsPerGroupToCopy",
+							"description": "Get objects (tables etc.) from control table required to be copied in this group. The order of objects to be copied following the TaskId in control table (ORDER BY [TaskId] DESC).",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "WITH OrderedControlTable AS (\n                             SELECT *, ROW_NUMBER() OVER (ORDER BY [TaskId], [Id] DESC) AS RowNumber\n                             FROM @{pipeline().parameters.MetadataConfigurationTableName}\n                             where CopyEnabled = 1)\n                             SELECT * FROM OrderedControlTable WHERE RowNumber BETWEEN @{add(mul(int(item()),pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity),\n                             add(mul(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.CurrentSequentialNumberOfBatch), 1))}\n                             AND @{min(add(mul(int(item()), pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity), add(mul(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.CurrentSequentialNumberOfBatch),\n                             pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity)),\n                            mul(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, add(pipeline().parameters.CurrentSequentialNumberOfBatch,1)), pipeline().parameters.SumOfObjectsToCopy)}",
+										"type": "Expression"
+									},
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "ConfigurationTable",
+									"type": "DatasetReference",
+									"parameters": {
+										"ServerName": {
+											"value": "@pipeline().parameters.Config_ServerName",
+											"type": "Expression"
+										},
+										"DatabaseName": {
+											"value": "@pipeline().parameters.Config_DatabaseName",
+											"type": "Expression"
+										},
+										"ConfigurationForDatabaseName": {
+											"value": "@pipeline().parameters.MetadataConfigurationTableName",
+											"type": "Expression"
+										}
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "CopyObjectsInOneGroup",
+							"description": "Execute another pipeline to copy objects from one group. The objects belonging to this group will be copied parallelly.",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "GetObjectsPerGroupToCopy",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "007_ProcessTable",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"ObjectsPerGroupToCopy": {
+										"value": "@activity('GetObjectsPerGroupToCopy').output.value",
+										"type": "Expression"
+									},
+									"ServerName": {
+										"value": "@pipeline().parameters.ServerName",
+										"type": "Expression"
+									},
+									"DatabaseName": {
+										"value": "@pipeline().parameters.DatabaseName",
+										"type": "Expression"
+									},
+									"MetadataConfigurationTableName": {
+										"value": "@pipeline().parameters.MetadataConfigurationTableName",
+										"type": "Expression"
+									},
+									"Config_ServerName": {
+										"value": "@pipeline().parameters.Config_ServerName",
+										"type": "Expression"
+									},
+									"Config_DatabaseName": {
+										"value": "@pipeline().parameters.Config_DatabaseName",
+										"type": "Expression"
+									},
+									"PipelineRunOutputPath": {
+										"value": "@pipeline().parameters.PipelineRunOutputPath",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"MaxNumberOfObjectsReturnedFromLookupActivity": {
+				"type": "Int"
+			},
+			"TopLevelPipelineName": {
+				"type": "String"
+			},
+			"TriggerName": {
+				"type": "String"
+			},
+			"CurrentSequentialNumberOfBatch": {
+				"type": "Int"
+			},
+			"SumOfObjectsToCopy": {
+				"type": "Int"
+			},
+			"SumOfObjectsToCopyForCurrentBatch": {
+				"type": "Int"
+			},
+			"MetadataConfigurationTableName": {
+				"type": "String"
+			},
+			"ServerName": {
+				"type": "string"
+			},
+			"DatabaseName": {
+				"type": "string"
+			},
+			"Config_ServerName": {
+				"type": "string"
+			},
+			"Config_DatabaseName": {
+				"type": "string"
+			},
+			"PipelineRunOutputPath": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Process Database"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-04-28T14:44:06Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}
