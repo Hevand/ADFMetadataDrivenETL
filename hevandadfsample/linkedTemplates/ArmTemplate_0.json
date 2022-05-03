@@ -1,0 +1,1699 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "hevandadfsample"
+		},
+		"ConfigurationDatabase_connectionString": {
+			"type": "secureString",
+			"metadata": "Secure string for 'connectionString' of 'ConfigurationDatabase'"
+		},
+		"TargetStorageAccount_properties_typeProperties_serviceEndpoint": {
+			"type": "string",
+			"defaultValue": "https://hevandadfsample.blob.core.windows.net"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/ConfigurationDatabase')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"parameters": {
+					"ServerName": {
+						"type": "string",
+						"defaultValue": "hevandsqlserver"
+					},
+					"DatabaseName": {
+						"type": "string",
+						"defaultValue": "hevandsql1"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"connectionString": "[parameters('ConfigurationDatabase_connectionString')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TargetStorageAccount')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"serviceEndpoint": "[parameters('TargetStorageAccount_properties_typeProperties_serviceEndpoint')]",
+					"accountKind": "StorageV2"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ConfigurationTable')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ConfigurationDatabase",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"ServerName": {
+							"value": "@dataset().ServerName",
+							"type": "Expression"
+						},
+						"DatabaseName": {
+							"value": "@dataset().DatabaseName",
+							"type": "Expression"
+						}
+					}
+				},
+				"parameters": {
+					"ServerName": {
+						"type": "string"
+					},
+					"DatabaseName": {
+						"type": "string"
+					},
+					"ConfigurationForDatabaseName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": {
+						"value": "@dataset().ConfigurationForDatabaseName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ConfigurationDatabase')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DestinationDataSet')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "TargetStorageAccount",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"cw_fileName": {
+						"type": "String"
+					},
+					"cw_folderPath": {
+						"type": "string"
+					},
+					"cw_container": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": {
+							"value": "@dataset().cw_fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().cw_folderPath",
+							"type": "Expression"
+						},
+						"container": {
+							"value": "@dataset().cw_container",
+							"type": "Expression"
+						}
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/TargetStorageAccount')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SourceDataSet')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "ConfigurationDatabase",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"ServerName": {
+							"value": "@dataset().cw_ls_ServerName",
+							"type": "Expression"
+						},
+						"DatabaseName": {
+							"value": "@dataset().cw_ls_DatabaseName",
+							"type": "Expression"
+						}
+					}
+				},
+				"parameters": {
+					"cw_schema": {
+						"type": "String"
+					},
+					"cw_table": {
+						"type": "String"
+					},
+					"cw_ls_ServerName": {
+						"type": "String"
+					},
+					"cw_ls_DatabaseName": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().cw_schema",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().cw_table",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/ConfigurationDatabase')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/004_InitializeMetadataTable')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Check Configuration",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ConfigurationTable",
+								"type": "DatasetReference",
+								"parameters": {
+									"ServerName": {
+										"value": "@pipeline().parameters.Config_ServerName",
+										"type": "Expression"
+									},
+									"DatabaseName": {
+										"value": "@pipeline().parameters.Config_DatabaseName",
+										"type": "Expression"
+									},
+									"ConfigurationForDatabaseName": {
+										"value": "@pipeline().parameters.DatabaseConfigTableName",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					},
+					{
+						"name": "Initialize Metadata",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "Check Configuration",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[dbo].[usp_CreateMetadataConfigurationTableForDatabase]",
+							"storedProcedureParameters": {
+								"DatabaseConfigTableName": {
+									"value": {
+										"value": "@pipeline().parameters.DatabaseConfigTableName",
+										"type": "Expression"
+									},
+									"type": "String"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "ConfigurationDatabase",
+							"type": "LinkedServiceReference",
+							"parameters": {
+								"ServerName": {
+									"value": "@pipeline().parameters.Config_ServerName",
+									"type": "Expression"
+								},
+								"DatabaseName": {
+									"value": "@pipeline().parameters.Config_DatabaseName",
+									"type": "Expression"
+								}
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"SubscriptionId": {
+						"type": "string"
+					},
+					"ResourceGroup": {
+						"type": "string"
+					},
+					"ServerName": {
+						"type": "string"
+					},
+					"DatabaseName": {
+						"type": "string"
+					},
+					"DatabaseConfigTableName": {
+						"type": "string"
+					},
+					"Config_ServerName": {
+						"type": "string"
+					},
+					"Config_DatabaseName": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Process Database"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-04-28T14:21:41Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ConfigurationTable')]",
+				"[concat(variables('factoryId'), '/linkedServices/ConfigurationDatabase')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/007_ProcessTable')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "This pipeline will copy objects from one group. The objects belonging to this group will be copied parallelly.",
+				"activities": [
+					{
+						"name": "ListObjectsFromOneGroup",
+						"description": "List objects from one group and iterate each of them to downstream activities",
+						"type": "ForEach",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@pipeline().parameters.ObjectsPerGroupToCopy",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "RouteJobsBasedOnLoadingBehavior",
+									"description": "Check the loading behavior for each object if it requires full load or incremental load. If it is Default or FullLoad case, do full load. If it is DeltaLoad case, do incremental load.",
+									"type": "Switch",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"on": {
+											"value": "@json(item().DataLoadingBehaviorSettings).dataLoadingBehavior",
+											"type": "Expression"
+										},
+										"cases": [
+											{
+												"value": "FullLoad",
+												"activities": [
+													{
+														"name": "FullLoadOneObject",
+														"description": "Take a full snapshot on this object and copy it to the destination",
+														"type": "Copy",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [
+															{
+																"name": "Source",
+																"value": "@{json(item().SourceObjectSettings).schema}.@{json(item().SourceObjectSettings).table}"
+															},
+															{
+																"name": "Destination",
+																"value": "@{json(item().SinkObjectSettings).container}/@{json(item().SinkObjectSettings).folderPath}/@{json(item().SinkObjectSettings).fileName}"
+															}
+														],
+														"typeProperties": {
+															"source": {
+																"type": "AzureSqlSource",
+																"sqlReaderQuery": {
+																	"value": "@{json(item().CopySourceSettings).sqlReaderQuery} from [@{json(item().SourceObjectSettings).schema}].[@{json(item().SourceObjectSettings).table}] ",
+																	"type": "Expression"
+																},
+																"isolationLevel": {
+																	"value": "@{json(item().CopySourceSettings).isolationLevel}",
+																	"type": "Expression"
+																},
+																"partitionOption": {
+																	"value": "@json(item().CopySourceSettings).partitionOption",
+																	"type": "Expression"
+																},
+																"partitionSettings": {
+																	"partitionColumnName": {
+																		"value": "@{json(item().CopySourceSettings).partitionColumnName}",
+																		"type": "Expression"
+																	},
+																	"partitionUpperBound": {
+																		"value": "@{json(item().CopySourceSettings).partitionUpperBound}",
+																		"type": "Expression"
+																	},
+																	"partitionLowerBound": {
+																		"value": "@{json(item().CopySourceSettings).partitionLowerBound}",
+																		"type": "Expression"
+																	},
+																	"partitionNames": "@json(item().CopySourceSettings).partitionNames"
+																}
+															},
+															"sink": {
+																"type": "ParquetSink",
+																"storeSettings": {
+																	"type": "AzureBlobStorageWriteSettings"
+																},
+																"formatSettings": {
+																	"type": "ParquetWriteSettings"
+																}
+															},
+															"enableStaging": false,
+															"validateDataConsistency": false,
+															"translator": {
+																"value": "@json(item().CopyActivitySettings).translator",
+																"type": "Expression"
+															}
+														},
+														"inputs": [
+															{
+																"referenceName": "SourceDataSet",
+																"type": "DatasetReference",
+																"parameters": {
+																	"cw_schema": {
+																		"value": "@json(item().SourceObjectSettings).schema",
+																		"type": "Expression"
+																	},
+																	"cw_table": {
+																		"value": "@json(item().SourceObjectSettings).table",
+																		"type": "Expression"
+																	},
+																	"cw_ls_ServerName": {
+																		"value": "@pipeline().parameters.ServerName",
+																		"type": "Expression"
+																	},
+																	"cw_ls_DatabaseName": {
+																		"value": "@pipeline().parameters.DatabaseName",
+																		"type": "Expression"
+																	}
+																}
+															}
+														],
+														"outputs": [
+															{
+																"referenceName": "DestinationDataSet",
+																"type": "DatasetReference",
+																"parameters": {
+																	"cw_fileName": {
+																		"value": "@json(item().SinkObjectSettings).fileName",
+																		"type": "Expression"
+																	},
+																	"cw_folderPath": {
+																		"value": "@pipeline().parameters.PipelineRunOutputPath",
+																		"type": "Expression"
+																	},
+																	"cw_container": {
+																		"value": "@json(item().SinkObjectSettings).container",
+																		"type": "Expression"
+																	}
+																}
+															}
+														]
+													}
+												]
+											},
+											{
+												"value": "DeltaLoad",
+												"activities": [
+													{
+														"name": "GetMaxWatermarkValue",
+														"description": "Query the source object to get the max value from watermark column",
+														"type": "Lookup",
+														"dependsOn": [],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"typeProperties": {
+															"source": {
+																"type": "AzureSqlSource",
+																"sqlReaderQuery": {
+																	"value": "select CASE WHEN '@{json(item().DataLoadingBehaviorSettings).watermarkColumnType}' = 'timestamp' THEN CAST(max([@{json(item().DataLoadingBehaviorSettings).watermarkColumnName}]) as bigint) ELSE max([@{json(item().DataLoadingBehaviorSettings).watermarkColumnName}]) END as CurrentMaxWaterMarkColumnValue from [@{json(item().SourceObjectSettings).schema}].[@{json(item().SourceObjectSettings).table}]",
+																	"type": "Expression"
+																},
+																"partitionOption": "None"
+															},
+															"dataset": {
+																"referenceName": "SourceDataSet",
+																"type": "DatasetReference",
+																"parameters": {
+																	"cw_schema": {
+																		"value": "@json(item().SourceObjectSettings).schema",
+																		"type": "Expression"
+																	},
+																	"cw_table": {
+																		"value": "@json(item().SourceObjectSettings).table",
+																		"type": "Expression"
+																	},
+																	"cw_ls_ServerName": {
+																		"value": "@pipeline().parameters.ServerName",
+																		"type": "Expression"
+																	},
+																	"cw_ls_DatabaseName": {
+																		"value": "@pipeline().parameters.DatabaseName",
+																		"type": "Expression"
+																	}
+																}
+															}
+														}
+													},
+													{
+														"name": "DeltaLoadOneObject",
+														"description": "Copy the changed data only from last time via comparing the value in watermark column to identify changes.",
+														"type": "Copy",
+														"dependsOn": [
+															{
+																"activity": "GetMaxWatermarkValue",
+																"dependencyConditions": [
+																	"Succeeded"
+																]
+															}
+														],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [
+															{
+																"name": "Source",
+																"value": "@{json(item().SourceObjectSettings).schema}.@{json(item().SourceObjectSettings).table}"
+															},
+															{
+																"name": "Destination",
+																"value": "@{json(item().SinkObjectSettings).container}/@{json(item().SinkObjectSettings).folderPath}/@{json(item().SinkObjectSettings).fileName}"
+															}
+														],
+														"typeProperties": {
+															"source": {
+																"type": "AzureSqlSource",
+																"sqlReaderQuery": {
+																	"value": "@{json(item().CopySourceSettings).sqlReaderQuery} from [@{json(item().SourceObjectSettings).schema}].[@{json(item().SourceObjectSettings).table}] \n    where @{if(contains( json(item().DataLoadingBehaviorSettings).watermarkColumnType, 'timestamp'),concat('CAST([', json(item().DataLoadingBehaviorSettings).watermarkColumnName, '] AS BIGINT)'), concat('[', json(item().DataLoadingBehaviorSettings).watermarkColumnName ,']'))} > @{if(contains(json(item().DataLoadingBehaviorSettings).watermarkColumnType, 'Int'),\n    json(item().DataLoadingBehaviorSettings).watermarkColumnStartValue, \n    concat('''', json(item().DataLoadingBehaviorSettings).watermarkColumnStartValue, ''''))}\n    and @{if(contains( json(item().DataLoadingBehaviorSettings).watermarkColumnType, 'timestamp'),concat('CAST([', json(item().DataLoadingBehaviorSettings).watermarkColumnName, '] AS BIGINT)'), concat('[', json(item().DataLoadingBehaviorSettings).watermarkColumnName ,']'))}  <= @{if(contains(json(item().DataLoadingBehaviorSettings).watermarkColumnType, 'Int'),\n    activity('GetMaxWatermarkValue').output.firstRow.CurrentMaxWaterMarkColumnValue, \n    concat('''', activity('GetMaxWatermarkValue').output.firstRow.CurrentMaxWaterMarkColumnValue, ''''))}",
+																	"type": "Expression"
+																},
+																"isolationLevel": {
+																	"value": "@{json(item().CopySourceSettings).isolationLevel}",
+																	"type": "Expression"
+																},
+																"partitionOption": {
+																	"value": "@json(item().CopySourceSettings).partitionOption",
+																	"type": "Expression"
+																},
+																"partitionSettings": {
+																	"partitionColumnName": {
+																		"value": "@{json(item().CopySourceSettings).partitionColumnName}",
+																		"type": "Expression"
+																	},
+																	"partitionUpperBound": {
+																		"value": "@{json(item().CopySourceSettings).partitionUpperBound}",
+																		"type": "Expression"
+																	},
+																	"partitionLowerBound": {
+																		"value": "@{json(item().CopySourceSettings).partitionLowerBound}",
+																		"type": "Expression"
+																	},
+																	"partitionNames": "@json(item().CopySourceSettings).partitionNames"
+																}
+															},
+															"sink": {
+																"type": "ParquetSink",
+																"storeSettings": {
+																	"type": "AzureBlobStorageWriteSettings"
+																},
+																"formatSettings": {
+																	"type": "ParquetWriteSettings"
+																}
+															},
+															"enableStaging": false,
+															"validateDataConsistency": false,
+															"translator": {
+																"value": "@json(item().CopyActivitySettings).translator",
+																"type": "Expression"
+															}
+														},
+														"inputs": [
+															{
+																"referenceName": "SourceDataSet",
+																"type": "DatasetReference",
+																"parameters": {
+																	"cw_schema": {
+																		"value": "@json(item().SourceObjectSettings).schema",
+																		"type": "Expression"
+																	},
+																	"cw_table": {
+																		"value": "@json(item().SourceObjectSettings).table",
+																		"type": "Expression"
+																	},
+																	"cw_ls_ServerName": {
+																		"value": "@pipeline().parameters.ServerName",
+																		"type": "Expression"
+																	},
+																	"cw_ls_DatabaseName": {
+																		"value": "@pipeline().parameters.DatabaseName",
+																		"type": "Expression"
+																	}
+																}
+															}
+														],
+														"outputs": [
+															{
+																"referenceName": "DestinationDataSet",
+																"type": "DatasetReference",
+																"parameters": {
+																	"cw_fileName": {
+																		"value": "@json(item().SinkObjectSettings).fileName",
+																		"type": "Expression"
+																	},
+																	"cw_folderPath": {
+																		"value": "@pipeline().parameters.PipelineRunOutputPath",
+																		"type": "Expression"
+																	},
+																	"cw_container": {
+																		"value": "@json(item().SinkObjectSettings).container",
+																		"type": "Expression"
+																	}
+																}
+															}
+														]
+													},
+													{
+														"name": "UpdateWatermarkColumnValue",
+														"type": "SqlServerStoredProcedure",
+														"dependsOn": [
+															{
+																"activity": "DeltaLoadOneObject",
+																"dependencyConditions": [
+																	"Succeeded"
+																]
+															}
+														],
+														"policy": {
+															"timeout": "7.00:00:00",
+															"retry": 0,
+															"retryIntervalInSeconds": 30,
+															"secureOutput": false,
+															"secureInput": false
+														},
+														"userProperties": [],
+														"typeProperties": {
+															"storedProcedureName": "[[dbo].[usp_UpdateMetadataConfigurationDatabaseWatermark]",
+															"storedProcedureParameters": {
+																"DatabaseConfigTableName": {
+																	"value": {
+																		"value": "@pipeline().parameters.MetadataConfigurationTableName",
+																		"type": "Expression"
+																	},
+																	"type": "String"
+																},
+																"Id": {
+																	"value": {
+																		"value": "@item().Id",
+																		"type": "Expression"
+																	},
+																	"type": "Int32"
+																},
+																"watermarkColumnStartValue": {
+																	"value": {
+																		"value": "@activity('GetMaxWatermarkValue').output.firstRow.CurrentMaxWaterMarkColumnValue",
+																		"type": "Expression"
+																	},
+																	"type": "Int64"
+																}
+															}
+														},
+														"linkedServiceName": {
+															"referenceName": "ConfigurationDatabase",
+															"type": "LinkedServiceReference",
+															"parameters": {
+																"ServerName": {
+																	"value": "@pipeline().parameters.Config_ServerName",
+																	"type": "Expression"
+																},
+																"DatabaseName": {
+																	"value": "@pipeline().parameters.Config_DatabaseName",
+																	"type": "Expression"
+																}
+															}
+														}
+													}
+												]
+											}
+										],
+										"defaultActivities": [
+											{
+												"name": "DefaultFullLoadOneObject",
+												"description": "Take a full snapshot on this object and copy it to the destination",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "7.00:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [
+													{
+														"name": "Source",
+														"value": "@{json(item().SourceObjectSettings).schema}.@{json(item().SourceObjectSettings).table}"
+													},
+													{
+														"name": "Destination",
+														"value": "@{json(item().SinkObjectSettings).container}/@{json(item().SinkObjectSettings).folderPath}/@{json(item().SinkObjectSettings).fileName}"
+													}
+												],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "@{json(item().CopySourceSettings).sqlReaderQuery} from [@{json(item().SourceObjectSettings).schema}].[@{json(item().SourceObjectSettings).table}] ",
+															"type": "Expression"
+														},
+														"isolationLevel": {
+															"value": "@{json(item().CopySourceSettings).isolationLevel}",
+															"type": "Expression"
+														},
+														"partitionOption": {
+															"value": "@json(item().CopySourceSettings).partitionOption",
+															"type": "Expression"
+														},
+														"partitionSettings": {
+															"partitionColumnName": {
+																"value": "@{json(item().CopySourceSettings).partitionColumnName}",
+																"type": "Expression"
+															},
+															"partitionUpperBound": {
+																"value": "@{json(item().CopySourceSettings).partitionUpperBound}",
+																"type": "Expression"
+															},
+															"partitionLowerBound": {
+																"value": "@{json(item().CopySourceSettings).partitionLowerBound}",
+																"type": "Expression"
+															},
+															"partitionNames": "@json(item().CopySourceSettings).partitionNames"
+														}
+													},
+													"sink": {
+														"type": "ParquetSink",
+														"storeSettings": {
+															"type": "AzureBlobStorageWriteSettings"
+														},
+														"formatSettings": {
+															"type": "ParquetWriteSettings"
+														}
+													},
+													"enableStaging": false,
+													"validateDataConsistency": false,
+													"translator": {
+														"value": "@json(item().CopyActivitySettings).translator",
+														"type": "Expression"
+													}
+												},
+												"inputs": [
+													{
+														"referenceName": "SourceDataSet",
+														"type": "DatasetReference",
+														"parameters": {
+															"cw_schema": {
+																"value": "@json(item().SourceObjectSettings).schema",
+																"type": "Expression"
+															},
+															"cw_table": {
+																"value": "@json(item().SourceObjectSettings).table",
+																"type": "Expression"
+															},
+															"cw_ls_ServerName": {
+																"value": "@pipeline().parameters.ServerName",
+																"type": "Expression"
+															},
+															"cw_ls_DatabaseName": {
+																"value": "@pipeline().parameters.DatabaseName",
+																"type": "Expression"
+															}
+														}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "DestinationDataSet",
+														"type": "DatasetReference",
+														"parameters": {
+															"cw_fileName": {
+																"value": "@json(item().SinkObjectSettings).fileName",
+																"type": "Expression"
+															},
+															"cw_folderPath": {
+																"value": "@pipeline().parameters.PipelineRunOutputPath",
+																"type": "Expression"
+															},
+															"cw_container": {
+																"value": "@json(item().SinkObjectSettings).container",
+																"type": "Expression"
+															}
+														}
+													}
+												]
+											}
+										]
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"ObjectsPerGroupToCopy": {
+						"type": "Array"
+					},
+					"ServerName": {
+						"type": "string"
+					},
+					"DatabaseName": {
+						"type": "string"
+					},
+					"MetadataConfigurationTableName": {
+						"type": "string"
+					},
+					"Config_ServerName": {
+						"type": "string"
+					},
+					"Config_DatabaseName": {
+						"type": "string"
+					},
+					"PipelineRunOutputPath": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Process Database"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-04-28T14:44:05Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SourceDataSet')]",
+				"[concat(variables('factoryId'), '/datasets/DestinationDataSet')]",
+				"[concat(variables('factoryId'), '/linkedServices/ConfigurationDatabase')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/006_ProcessTablesPerPage')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "This pipeline will copy one batch of objects. The objects belonging to this batch will be copied parallelly.",
+				"activities": [
+					{
+						"name": "DivideOneBatchIntoMultipleGroups",
+						"description": "Divide objects from single batch into multiple sub parallel groups to avoid reaching the output limit of lookup activity.",
+						"type": "ForEach",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@range(0, add(div(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity),\n                    if(equals(mod(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity), 0), 0, 1)))",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"batchCount": 50,
+							"activities": [
+								{
+									"name": "GetObjectsPerGroupToCopy",
+									"description": "Get objects (tables etc.) from control table required to be copied in this group. The order of objects to be copied following the TaskId in control table (ORDER BY [TaskId] DESC).",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "WITH OrderedControlTable AS (\n                             SELECT *, ROW_NUMBER() OVER (ORDER BY [TaskId], [Id] DESC) AS RowNumber\n                             FROM @{pipeline().parameters.MetadataConfigurationTableName}\n                             where CopyEnabled = 1)\n                             SELECT * FROM OrderedControlTable WHERE RowNumber BETWEEN @{add(mul(int(item()),pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity),\n                             add(mul(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.CurrentSequentialNumberOfBatch), 1))}\n                             AND @{min(add(mul(int(item()), pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity), add(mul(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, pipeline().parameters.CurrentSequentialNumberOfBatch),\n                             pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity)),\n                            mul(pipeline().parameters.SumOfObjectsToCopyForCurrentBatch, add(pipeline().parameters.CurrentSequentialNumberOfBatch,1)), pipeline().parameters.SumOfObjectsToCopy)}",
+												"type": "Expression"
+											},
+											"partitionOption": "None"
+										},
+										"dataset": {
+											"referenceName": "ConfigurationTable",
+											"type": "DatasetReference",
+											"parameters": {
+												"ServerName": {
+													"value": "@pipeline().parameters.Config_ServerName",
+													"type": "Expression"
+												},
+												"DatabaseName": {
+													"value": "@pipeline().parameters.Config_DatabaseName",
+													"type": "Expression"
+												},
+												"ConfigurationForDatabaseName": {
+													"value": "@pipeline().parameters.MetadataConfigurationTableName",
+													"type": "Expression"
+												}
+											}
+										},
+										"firstRowOnly": false
+									}
+								},
+								{
+									"name": "CopyObjectsInOneGroup",
+									"description": "Execute another pipeline to copy objects from one group. The objects belonging to this group will be copied parallelly.",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "GetObjectsPerGroupToCopy",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "007_ProcessTable",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"ObjectsPerGroupToCopy": {
+												"value": "@activity('GetObjectsPerGroupToCopy').output.value",
+												"type": "Expression"
+											},
+											"ServerName": {
+												"value": "@pipeline().parameters.ServerName",
+												"type": "Expression"
+											},
+											"DatabaseName": {
+												"value": "@pipeline().parameters.DatabaseName",
+												"type": "Expression"
+											},
+											"MetadataConfigurationTableName": {
+												"value": "@pipeline().parameters.MetadataConfigurationTableName",
+												"type": "Expression"
+											},
+											"Config_ServerName": {
+												"value": "@pipeline().parameters.Config_ServerName",
+												"type": "Expression"
+											},
+											"Config_DatabaseName": {
+												"value": "@pipeline().parameters.Config_DatabaseName",
+												"type": "Expression"
+											},
+											"PipelineRunOutputPath": {
+												"value": "@pipeline().parameters.PipelineRunOutputPath",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"MaxNumberOfObjectsReturnedFromLookupActivity": {
+						"type": "Int"
+					},
+					"TopLevelPipelineName": {
+						"type": "String"
+					},
+					"TriggerName": {
+						"type": "String"
+					},
+					"CurrentSequentialNumberOfBatch": {
+						"type": "Int"
+					},
+					"SumOfObjectsToCopy": {
+						"type": "Int"
+					},
+					"SumOfObjectsToCopyForCurrentBatch": {
+						"type": "Int"
+					},
+					"MetadataConfigurationTableName": {
+						"type": "String"
+					},
+					"ServerName": {
+						"type": "string"
+					},
+					"DatabaseName": {
+						"type": "string"
+					},
+					"Config_ServerName": {
+						"type": "string"
+					},
+					"Config_DatabaseName": {
+						"type": "string"
+					},
+					"PipelineRunOutputPath": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Process Database"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-04-28T14:44:06Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ConfigurationTable')]",
+				"[concat(variables('factoryId'), '/pipelines/007_ProcessTable')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/005_GroupDatabaseTablesAsPages')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "This pipeline will count the total number of objects (tables etc.) required to be copied in this run, come up with the number of sequential batches based on the max allowed concurrent copy task, and then execute another pipeline to copy different batches sequentially.",
+				"activities": [
+					{
+						"name": "GetSumOfObjectsToCopy",
+						"description": "Count the total number of objects (tables etc.) required to be copied in this run.",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT count(*) as count FROM @{pipeline().parameters.MetadataConfigurationTableName} where CopyEnabled = 1",
+									"type": "Expression"
+								},
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ConfigurationTable",
+								"type": "DatasetReference",
+								"parameters": {
+									"ServerName": {
+										"value": "@pipeline().parameters.Config_ServerName",
+										"type": "Expression"
+									},
+									"DatabaseName": {
+										"value": "@pipeline().parameters.Config_DatabaseName",
+										"type": "Expression"
+									},
+									"ConfigurationForDatabaseName": {
+										"value": "@pipeline().parameters.MetadataConfigurationTableName",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					},
+					{
+						"name": "CopyBatchesOfObjectsSequentially",
+						"description": "Come up with the number of sequential batches based on the max allowed concurrent copy tasks, and then execute another pipeline to copy different batches sequentially.",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetSumOfObjectsToCopy",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@range(0, add(div(activity('GetSumOfObjectsToCopy').output.firstRow.count,\n                    pipeline().parameters.MaxNumberOfConcurrentTasks),\n                    if(equals(mod(activity('GetSumOfObjectsToCopy').output.firstRow.count,\n                    pipeline().parameters.MaxNumberOfConcurrentTasks), 0), 0, 1)))",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "CopyObjectsInOneBatch",
+									"description": "Execute another pipeline to copy one batch of objects. The objects belonging to this batch will be copied parallelly.",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "006_ProcessTablesPerPage",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"MaxNumberOfObjectsReturnedFromLookupActivity": {
+												"value": "@pipeline().parameters.MaxNumberOfObjectsReturnedFromLookupActivity",
+												"type": "Expression"
+											},
+											"TopLevelPipelineName": {
+												"value": "@{pipeline().Pipeline}",
+												"type": "Expression"
+											},
+											"TriggerName": {
+												"value": "@{pipeline().TriggerName}",
+												"type": "Expression"
+											},
+											"CurrentSequentialNumberOfBatch": {
+												"value": "@item()",
+												"type": "Expression"
+											},
+											"SumOfObjectsToCopy": {
+												"value": "@activity('GetSumOfObjectsToCopy').output.firstRow.count",
+												"type": "Expression"
+											},
+											"SumOfObjectsToCopyForCurrentBatch": {
+												"value": "@min(pipeline().parameters.MaxNumberOfConcurrentTasks, activity('GetSumOfObjectsToCopy').output.firstRow.count)",
+												"type": "Expression"
+											},
+											"MetadataConfigurationTableName": {
+												"value": "@pipeline().parameters.MetadataConfigurationTableName",
+												"type": "Expression"
+											},
+											"ServerName": {
+												"value": "@pipeline().parameters.ServerName",
+												"type": "Expression"
+											},
+											"DatabaseName": {
+												"value": "@pipeline().parameters.DatabaseName",
+												"type": "Expression"
+											},
+											"Config_ServerName": {
+												"value": "@pipeline().parameters.Config_ServerName",
+												"type": "Expression"
+											},
+											"Config_DatabaseName": {
+												"value": "@pipeline().parameters.Config_DatabaseName",
+												"type": "Expression"
+											},
+											"PipelineRunOutputPath": {
+												"value": "@pipeline().parameters.PipelineRunOutputPath",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"MaxNumberOfObjectsReturnedFromLookupActivity": {
+						"type": "Int",
+						"defaultValue": 5000
+					},
+					"MaxNumberOfConcurrentTasks": {
+						"type": "Int",
+						"defaultValue": 20
+					},
+					"MetadataConfigurationTableName": {
+						"type": "String"
+					},
+					"ServerName": {
+						"type": "string"
+					},
+					"DatabaseName": {
+						"type": "string"
+					},
+					"Config_ServerName": {
+						"type": "string"
+					},
+					"Config_DatabaseName": {
+						"type": "string"
+					},
+					"PipelineRunOutputPath": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Process Database"
+				},
+				"annotations": [
+					"MetadataDrivenSolution"
+				],
+				"lastPublishTime": "2022-04-28T14:44:07Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ConfigurationTable')]",
+				"[concat(variables('factoryId'), '/pipelines/006_ProcessTablesPerPage')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/003_LoopOverDatabases')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get databases by server",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": {
+								"value": "@concat('https://management.azure.com/subscriptions/',\npipeline().parameters.SubscriptionId,\n'/resourceGroups/',\npipeline().parameters.ResourceGroup\n,'/providers/Microsoft.Sql/servers/',\npipeline().parameters.ServerName\n,'/databases?api-version=2021-11-01-preview')",
+								"type": "Expression"
+							},
+							"method": "GET",
+							"headers": {},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://management.azure.com/"
+							}
+						}
+					},
+					{
+						"name": "Process Database",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Exclude master tables",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Exclude master tables').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "Initialize Configuration",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "004_InitializeMetadataTable",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"SubscriptionId": {
+												"value": "@pipeline().parameters.SubscriptionId",
+												"type": "Expression"
+											},
+											"ResourceGroup": {
+												"value": "@pipeline().parameters.ResourceGroup",
+												"type": "Expression"
+											},
+											"ServerName": {
+												"value": "@pipeline().parameters.ServerName",
+												"type": "Expression"
+											},
+											"DatabaseName": {
+												"value": "@item().name",
+												"type": "Expression"
+											},
+											"DatabaseConfigTableName": {
+												"value": "@concat(pipeline().parameters.ServerName,\n'_',\nitem().name,\n'_metadata')",
+												"type": "Expression"
+											},
+											"Config_ServerName": {
+												"value": "@pipeline().parameters.Config_ServerName",
+												"type": "Expression"
+											},
+											"Config_DatabaseName": {
+												"value": "@pipeline().parameters.Config_DatabaseName",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								{
+									"name": "Extract data",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "Initialize Configuration",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "005_GroupDatabaseTablesAsPages",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"MaxNumberOfObjectsReturnedFromLookupActivity": 5000,
+											"MaxNumberOfConcurrentTasks": 20,
+											"MetadataConfigurationTableName": {
+												"value": "@concat(pipeline().parameters.ServerName,\n'_',\nitem().name,\n'_metadata')",
+												"type": "Expression"
+											},
+											"ServerName": {
+												"value": "@pipeline().parameters.ServerName",
+												"type": "Expression"
+											},
+											"DatabaseName": {
+												"value": "@item().name",
+												"type": "Expression"
+											},
+											"Config_ServerName": {
+												"value": "@pipeline().parameters.Config_ServerName",
+												"type": "Expression"
+											},
+											"Config_DatabaseName": {
+												"value": "@pipeline().parameters.Config_DatabaseName",
+												"type": "Expression"
+											},
+											"PipelineRunOutputPath": {
+												"value": "@pipeline().parameters.PipelineRunOutputPath",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Exclude master tables",
+						"type": "Filter",
+						"dependsOn": [
+							{
+								"activity": "Get databases by server",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get databases by server').output.value",
+								"type": "Expression"
+							},
+							"condition": {
+								"value": "@not(equals(item().name,'master'))",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"SubscriptionId": {
+						"type": "string"
+					},
+					"ResourceGroup": {
+						"type": "string"
+					},
+					"ServerName": {
+						"type": "string"
+					},
+					"Config_ServerName": {
+						"type": "string"
+					},
+					"Config_DatabaseName": {
+						"type": "string"
+					},
+					"PipelineRunOutputPath": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Identify all databases"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-04-28T14:30:15Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/004_InitializeMetadataTable')]",
+				"[concat(variables('factoryId'), '/pipelines/005_GroupDatabaseTablesAsPages')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/002_LoopOverServers')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"description": "This pipeline will use the Azure REST API to get all databases in the given subscription.",
+				"activities": [
+					{
+						"name": "Get servers by resource group",
+						"description": "Use the Azure REST API to retrieve all servers in this RG",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": {
+								"value": "@concat('https://management.azure.com/subscriptions/',\npipeline().parameters.SubscriptionId,\n'/resourceGroups/',\npipeline().parameters.ResourceGroup\n,'/providers/Microsoft.Sql/servers?api-version=2021-11-01-preview')\n",
+								"type": "Expression"
+							},
+							"method": "GET",
+							"headers": {},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://management.azure.com/"
+							}
+						}
+					},
+					{
+						"name": "Process servers in resource group",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Get servers by resource group",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get servers by resource group').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "Loop over databases",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "003_LoopOverDatabases",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"SubscriptionId": {
+												"value": "@pipeline().parameters.SubscriptionId",
+												"type": "Expression"
+											},
+											"ResourceGroup": {
+												"value": "@pipeline().parameters.ResourceGroup",
+												"type": "Expression"
+											},
+											"ServerName": {
+												"value": "@item().name",
+												"type": "Expression"
+											},
+											"Config_ServerName": {
+												"value": "@pipeline().parameters.Config_ServerName",
+												"type": "Expression"
+											},
+											"Config_DatabaseName": {
+												"value": "@pipeline().parameters.Config_DatabaseName",
+												"type": "Expression"
+											},
+											"PipelineRunOutputPath": {
+												"value": "@pipeline().parameters.PipelineRunOutputPath",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"SubscriptionId": {
+						"type": "string"
+					},
+					"ResourceGroup": {
+						"type": "string"
+					},
+					"Config_ServerName": {
+						"type": "string"
+					},
+					"Config_DatabaseName": {
+						"type": "string"
+					},
+					"PipelineRunOutputPath": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Identify all databases"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-04-28T14:30:16Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/003_LoopOverDatabases')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/001_LoopOverResourceGroups')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get all resource groups in subscription",
+						"description": "Use the Azure REST API to retrieve all servers in this subscription",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "7.00:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": {
+								"value": "@concat('https://management.azure.com/subscriptions/',pipeline().parameters.SubscriptionId,'/resourcegroups?api-version=2021-04-01')\n\n",
+								"type": "Expression"
+							},
+							"method": "GET",
+							"headers": {},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://management.azure.com/"
+							}
+						}
+					},
+					{
+						"name": "Process resource group",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Get all resource groups in subscription",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Set output path",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get all resource groups in subscription').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "Loop over servers",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "002_LoopOverServers",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"SubscriptionId": {
+												"value": "@pipeline().parameters.SubscriptionId",
+												"type": "Expression"
+											},
+											"ResourceGroup": {
+												"value": "@item().name",
+												"type": "Expression"
+											},
+											"Config_ServerName": {
+												"value": "@pipeline().parameters.Config_ServerName",
+												"type": "Expression"
+											},
+											"Config_DatabaseName": {
+												"value": "@pipeline().parameters.Config_DatabaseName",
+												"type": "Expression"
+											},
+											"PipelineRunOutputPath": {
+												"value": "@variables('PipelineRunResultPathPrefix')",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Set output path",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineRunResultPathPrefix",
+							"value": {
+								"value": "@formatDateTime(utcNow(), '/yyyy/MM/dd/HH/mm/')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"parameters": {
+					"SubscriptionId": {
+						"type": "string"
+					},
+					"Config_ServerName": {
+						"type": "string"
+					},
+					"Config_DatabaseName": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"PipelineRunResultPathPrefix": {
+						"type": "String",
+						"defaultValue": "/"
+					}
+				},
+				"folder": {
+					"name": "Identify all databases"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-04-28T13:06:59Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/002_LoopOverServers')]"
+			]
+		}
+	]
+}
