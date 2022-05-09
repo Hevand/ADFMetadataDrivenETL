@@ -2,7 +2,6 @@
 
 
 # Deploy pipeline
-[![Deploy To Azure](https://docs.microsoft.com/en-us/azure/templates/media/deploy-to-azure.svg)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FHevand%2FADFMetadataDrivenETL%2Fadf_publish%2Fhevandadfsample%2FARMTemplateForFactory.json)
 
 Missing (to be created manually / scripted later):
 - config database, containing the two stored procedures in [sql](./sql/)
