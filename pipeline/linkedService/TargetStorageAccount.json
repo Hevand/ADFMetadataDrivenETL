@@ -4,7 +4,7 @@
 		"annotations": [],
 		"type": "AzureBlobStorage",
 		"typeProperties": {
-			"serviceEndpoint": "https://hevandadfsample.blob.core.windows.net",
+			"serviceEndpoint": "https://hevandexactdemo.blob.core.windows.net",
 			"accountKind": "StorageV2"
 		}
 	},
