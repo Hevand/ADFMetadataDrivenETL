@@ -9,7 +9,7 @@
 			"value": ""
 		},
 		"TargetStorageAccount_properties_typeProperties_serviceEndpoint": {
-			"value": "https://hevandadfsample.blob.core.windows.net"
+			"value": "https://hevandexactdemo.blob.core.windows.net"
 		}
 	}
 }
